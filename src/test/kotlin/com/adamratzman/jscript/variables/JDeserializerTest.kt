@@ -11,5 +11,6 @@ internal class JDeserializerTest {
     @Test
     fun parseList() {
         println(deserializer.parseList("[3.0, 5, \"hello world\" ]").getJListFromParsedList().objects[1])
+        println(deserializer.parseList("[\"test\", [3, 4.0]]").getJListFromParsedList().objects[1])
     }
 }

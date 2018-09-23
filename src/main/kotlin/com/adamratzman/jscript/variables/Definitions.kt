@@ -28,10 +28,11 @@ class JDeserializer(val strict: Boolean) {
             '\"' -> {
                 for (i in 1..(listObjectString.length - 1)) {
                     if (listObjectString[i] == '\"' && (i == 0 || listObjectString[i - 1] != '\\')) {
-                        return if (i == listObjectString.lastIndex) mutableListOf(fromString(listObjectString.substring(0, i + 1)))
-                        else if (listObjectString[i + 1] == ',') {
-                            (mutableListOf(fromString(listObjectString.substring(0, i + 1))) + parseList(listObjectString.substring(2, listObjectString.length))).toMutableList()
-                        } else throw DeserializationException("A character other than a comma was provided as the delimeter in $listObjectString at position ${i + 1}")
+                        return when {
+                            i == listObjectString.lastIndex -> mutableListOf(fromString(listObjectString.substring(0, i + 1)))
+                            listObjectString[i + 1] == ',' -> (mutableListOf(fromString(listObjectString.substring(0, i + 1))) + parseList(listObjectString.substring(i + 2, listObjectString.length))).toMutableList()
+                            else -> throw DeserializationException("A character other than a comma was provided as the delimeter in $listObjectString at position ${i + 1}")
+                        }
                     }
                 }
                 throw DeserializationException("A matching quotation mark wasn't found for $listObjectString")
