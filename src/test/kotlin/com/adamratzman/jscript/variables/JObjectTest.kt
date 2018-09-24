@@ -8,9 +8,11 @@ internal class JObjectTest {
         val numObject = JList(mutableListOf(JDouble(4.3), JLong(5)))
         val nestedObject = JObject(mutableMapOf("numbers" to numObject, "hello" to "world"))
         val nestedObjectWithOtherJObject = JObject(mutableMapOf("object" to nestedObject, "list" to numObject, "azzerial" to "is cool?"))
-        println(nestedObjectWithOtherJObject.toString())
+
+        val complexObj = JObject(mutableMapOf("info" to JList(mutableListOf(numObject,nestedObject)), "user" to "test"))
+        println(complexObj)
 
         val nestedList = JList(mutableListOf(nestedObject,nestedObject))
-        println(nestedList.toString())
+       // println(nestedList.toString())
     }
 }
