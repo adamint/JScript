@@ -1,5 +1,8 @@
 package com.adamratzman.jscript.variables
 
+import kotlin.reflect.full.declaredMemberProperties
+import kotlin.reflect.jvm.javaField
+
 class JDeserializer(val strict: Boolean) {
     fun fromString(string: String): JObject {
         if (strict && string.trim() != string) throw DeserializationException("Strict parsing is on and there's a leading or trailing space!")
@@ -12,6 +15,8 @@ class JDeserializer(val strict: Boolean) {
                 JDouble(toParse.toDouble())
             } else if (toParse.toLongOrNull() != null) {
                 JLong(toParse.toLong())
+            } else if (toParse == "false" || toParse == "true") {
+                JBoolean(toParse.toBoolean())
             } else if (toParse.startsWith("[")) {
                 val listObjectString = toParse.substring(1, toParse.length - 1)
                 JList(parseList(listObjectString))
@@ -41,7 +46,7 @@ class JDeserializer(val strict: Boolean) {
                             val value = toParse.substring(1, i)
                             keyValuePairs[key] = value
                             found = true
-                            innerString = toParse.substring(i+1,toParse.length)
+                            innerString = toParse.substring(i + 1, toParse.length)
                             break
                         }
                     }
@@ -69,15 +74,17 @@ class JDeserializer(val strict: Boolean) {
                 // numerical value
                 else -> {
                     val endParsePosition = toParse.indexOf(',').let { if (it == -1) toParse.length else it }
-                    val num = toParse.substring(0, endParsePosition).let {
-                        it.toLongOrNull() ?: it.toDoubleOrNull()
-                    } ?: throw DeserializationException("Expected number in $toParse characters 0 to ${endParsePosition - 1}")
-                    val obj = when (num) {
-                        is Long -> JLong(num)
-                        is Double -> JDouble(num)
-                        else -> throw DeserializationException("Expected type Double or Long in $toParse. Got... something else?")
+                    val parsed = toParse.substring(0, endParsePosition).let {
+                        if (it == "false" || it == "true") it.toBoolean() else it.toLongOrNull() ?: it.toDoubleOrNull()
                     }
-                    keyValuePairs[key] = obj.backedValue
+                            ?: throw DeserializationException("Expected number in $toParse characters 0 to ${endParsePosition - 1}")
+                    val obj = when (parsed) {
+                        is Boolean -> JBoolean(parsed)
+                        is Long -> JLong(parsed)
+                        is Double -> JDouble(parsed)
+                        else -> throw DeserializationException("Expected type Double, Long, or Boolean in $toParse. Got... something else?")
+                    }
+                    keyValuePairs[key] = if (obj is JNumber) obj.backedValue else (obj as JBoolean).boolean
                     innerString = if (endParsePosition == toParse.length || toParse[endParsePosition] != ',') "" else toParse.substring(endParsePosition + 1)
                 }
             }
@@ -124,13 +131,16 @@ class JDeserializer(val strict: Boolean) {
             // if item is a number
             else -> {
                 val endParsePosition = listObjectString.indexOf(',').let { if (it == -1) listObjectString.length else it }
-                val num = listObjectString.substring(0, endParsePosition).let {
-                    it.toLongOrNull() ?: it.toDoubleOrNull()
-                } ?: throw DeserializationException("Expected number in $listObjectString characters 0 to ${endParsePosition - 1}")
-                val obj = when (num) {
-                    is Long -> JLong(num)
-                    is Double -> JDouble(num)
-                    else -> throw DeserializationException("Expected type Double or Long in $listObjectString. Got... something else?")
+
+                val parsed = listObjectString.substring(0, endParsePosition).let {
+                    if (it == "false" || it == "true") it.toBoolean() else it.toLongOrNull() ?: it.toDoubleOrNull()
+                }
+                        ?: throw DeserializationException("Expected number in $listObjectString characters 0 to ${endParsePosition - 1}")
+                val obj = when (parsed) {
+                    is Boolean -> JBoolean(parsed)
+                    is Long -> JLong(parsed)
+                    is Double -> JDouble(parsed)
+                    else -> throw DeserializationException("Expected type Double, Long, or Boolean in $listObjectString. Got... something else?")
                 }
                 return when {
                     endParsePosition == listObjectString.length -> mutableListOf(obj)
@@ -145,7 +155,14 @@ class JDeserializer(val strict: Boolean) {
 
 fun MutableList<JObject>.getJListFromParsedList() = this[0] as JList
 
-open class JObject(var fields: MutableMap<String, Any>) {
+open class JObject(var fields: MutableMap<String, Any> = mutableMapOf()) {
+    fun setupObject() {
+        this::class.declaredMemberProperties.forEach { property ->
+            property.javaField?.let { it.isAccessible = true; println(it.get(this)) }
+            property.getter.call(this)?.let { if (property.name != "fields") fields[property.name] = it }
+        }
+    }
+
     override fun toString(): String {
         val valueField = fields["value"]
         if (valueField !is JList && valueField !is JObject && fields.size == 1) {
@@ -165,7 +182,8 @@ open class JObject(var fields: MutableMap<String, Any>) {
                         .mapIndexed { index, s -> (if (index > 0) "  " else "") + s }.joinToString("\n")
                 is String -> "\"$value\""
                 is Number -> value.toString()
-                else -> throw IllegalArgumentException("Argument $value isn't of a recognizable type")
+                is Boolean -> value.toString()
+                else -> "\"$value\""
             }
             counter++
             sb.append(serializedValue)
@@ -189,8 +207,10 @@ class JList(val objects: MutableList<out JObject>) : JObject(mutableMapOf("value
 }
 
 class JFunction(val name: String, val code: String, val acceptedArguments: MutableList<JFunctionArgument>, val returnInfo: JFunctionReturnInfo) :
-        JObject(mutableMapOf("name" to name, "arguments" to JList(acceptedArguments), "returns" to returnInfo,
-                "code" to code)) {
+        JObject() {
+    init {
+        setupObject()
+    }
 
     override fun toString(): String {
         // val obj = JObject(mutableMapOf("type" to "function", "accepts"))
@@ -198,11 +218,17 @@ class JFunction(val name: String, val code: String, val acceptedArguments: Mutab
     }
 }
 
-class JFunctionArgument(val name: String, val required: Boolean, val type: ObjectType)
-    : JObject(mutableMapOf("name" to name, "required" to required, "type" to type))
+class JFunctionArgument(val name: String, val required: Boolean, val type: ObjectType) : JObject() {
+    init {
+        setupObject()
+    }
+}
 
-class JFunctionReturnInfo(val returnType: ObjectType, val required: Boolean)
-    : JObject(mutableMapOf("returnType" to returnType, "required" to required))
+class JFunctionReturnInfo(val returnType: ObjectType, val required: Boolean) : JObject() {
+    init {
+        setupObject()
+    }
+}
 
 /**
  * Parent number class. Accepted are 2 types: longs and doubles, nothing else
@@ -213,6 +239,8 @@ class JLong(number: Long) : JNumber(number)
 class JDouble(number: Double) : JNumber(number)
 
 class JString(val string: String) : JObject(mutableMapOf("value" to string))
+
+class JBoolean(val boolean: Boolean) : JObject(mutableMapOf("value" to boolean))
 
 enum class ObjectType { STRING, LONG, DOUBLE, LIST, OBJECT, FUNCTION }
 

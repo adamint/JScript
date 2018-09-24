@@ -17,13 +17,15 @@ internal class JDeserializerTest {
     @Test
     fun parseObject() {
         println(deserializer.parseObject("""
-  {
-  info = [[4.3, 5], {
-  numbers = [4.3, 5],
-  hello = "world"
-}],
-  user = "test"
+          {
+  object = {
+    numbers = [4.3, 5, true],
+    hello = "world"
+  },
+  list = [4.3, 5, false],
+  azzerial = "is cool?"
 }
+
         """.trimIndent()))
     }
 

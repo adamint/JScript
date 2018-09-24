@@ -5,6 +5,7 @@ import com.adamratzman.jscript.variables.JFunction
 import com.adamratzman.jscript.variables.JObject
 
 class JScriptInMemoryImplementation : JScript() {
+    val integratedObjects = mutableListOf<Class<out JObject>>()
     internal val variables = mutableMapOf<String?, MutableMap<String, JObject>>()
 
     override fun getGlobalVariable(identifier: String?, varName: String): JObject? {

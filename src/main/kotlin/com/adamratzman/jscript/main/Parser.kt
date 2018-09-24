@@ -1,6 +1,8 @@
 package com.adamratzman.jscript.main
 
-class Parser(val jscript: JScript) {
+import com.adamratzman.jscript.variables.JObject
+
+class Parser(val jscript: JScript, val integratedObjects:MutableList<Class<out JObject>>) {
     fun parse(user: String, input: String) {
         // each statement will be terminated with a semi-colon (;) which will make parsing really easy
         val statements = input.splitToStatements()
