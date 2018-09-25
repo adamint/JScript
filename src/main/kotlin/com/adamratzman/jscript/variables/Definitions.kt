@@ -17,6 +17,8 @@ class JDeserializer(val strict: Boolean) {
                 JLong(toParse.toLong())
             } else if (toParse == "false" || toParse == "true") {
                 JBoolean(toParse.toBoolean())
+            } else if (toParse == "nothing") {
+                JNothing()
             } else if (toParse.startsWith("[")) {
                 val listObjectString = toParse.substring(1, toParse.length - 1)
                 JList(parseList(listObjectString))
@@ -36,6 +38,8 @@ class JDeserializer(val strict: Boolean) {
             val split = innerString.split(" ")
             if (split[1] != "=") throw DeserializationException("Object keys must be mapped to a value with the = sign in $innerString")
             val key = split[0]
+            if (key[0].isDigit()) throw DeserializationException("Key $key cannot start with a number in $innerString")
+            if (key == "nothing" || key == "=") throw DeserializationException("Key in $innerString cannot be named nothing or =")
             val toParse = split.subList(2, split.size).joinToString(" ").trim()
             when (toParse[0]) {
                 // string value
@@ -71,20 +75,21 @@ class JDeserializer(val strict: Boolean) {
 
                     if (leftCount != rightCount) throw DeserializationException("A matching outer $rightChar wasn't found for $leftChar in $toParse")
                 }
-                // numerical value
+                // boolean, number, or nothing value
                 else -> {
                     val endParsePosition = toParse.indexOf(',').let { if (it == -1) toParse.length else it }
                     val parsed = toParse.substring(0, endParsePosition).let {
-                        if (it == "false" || it == "true") it.toBoolean() else it.toLongOrNull() ?: it.toDoubleOrNull()
+                        if (it == "false" || it == "true") it.toBoolean() else if (it == "nothing") Unit else it.toLongOrNull() ?: it.toDoubleOrNull()
                     }
                             ?: throw DeserializationException("Expected number in $toParse characters 0 to ${endParsePosition - 1}")
                     val obj = when (parsed) {
+                        is Unit -> JNothing()
                         is Boolean -> JBoolean(parsed)
                         is Long -> JLong(parsed)
                         is Double -> JDouble(parsed)
-                        else -> throw DeserializationException("Expected type Double, Long, or Boolean in $toParse. Got... something else?")
+                        else -> throw DeserializationException("Expected type Double, Long, Nothing, or Boolean in $toParse. Got... something else?")
                     }
-                    keyValuePairs[key] = if (obj is JNumber) obj.backedValue else (obj as JBoolean).boolean
+                    keyValuePairs[key] = (obj as? JNumber)?.backedValue ?: if (obj is JNothing) Unit else (obj as JBoolean).boolean
                     innerString = if (endParsePosition == toParse.length || toParse[endParsePosition] != ',') "" else toParse.substring(endParsePosition + 1)
                 }
             }
@@ -128,19 +133,20 @@ class JDeserializer(val strict: Boolean) {
                 }
                 if (leftCount != rightCount) throw DeserializationException("A matching outer $rightChar wasn't found for $leftChar in $listObjectString")
             }
-            // if item is a number
+            // if item is a boolean, number, or nothing
             else -> {
                 val endParsePosition = listObjectString.indexOf(',').let { if (it == -1) listObjectString.length else it }
 
                 val parsed = listObjectString.substring(0, endParsePosition).let {
-                    if (it == "false" || it == "true") it.toBoolean() else it.toLongOrNull() ?: it.toDoubleOrNull()
+                    if (it == "false" || it == "true") it.toBoolean() else if (it == "nothing") Unit else it.toLongOrNull() ?: it.toDoubleOrNull()
                 }
                         ?: throw DeserializationException("Expected number in $listObjectString characters 0 to ${endParsePosition - 1}")
                 val obj = when (parsed) {
+                    is Unit -> JNothing()
                     is Boolean -> JBoolean(parsed)
                     is Long -> JLong(parsed)
                     is Double -> JDouble(parsed)
-                    else -> throw DeserializationException("Expected type Double, Long, or Boolean in $listObjectString. Got... something else?")
+                    else -> throw DeserializationException("Expected type Double, Long, Nothing, or Boolean in $listObjectString. Got... something else?")
                 }
                 return when {
                     endParsePosition == listObjectString.length -> mutableListOf(obj)
@@ -183,6 +189,7 @@ open class JObject(var fields: MutableMap<String, Any> = mutableMapOf()) {
                 is String -> "\"$value\""
                 is Number -> value.toString()
                 is Boolean -> value.toString()
+                is Unit -> "nothing"
                 else -> "\"$value\""
             }
             counter++
@@ -242,6 +249,9 @@ class JString(val string: String) : JObject(mutableMapOf("value" to string))
 
 class JBoolean(val boolean: Boolean) : JObject(mutableMapOf("value" to boolean))
 
+class JNothing:JObject(mutableMapOf("value" to Unit))
+
 enum class ObjectType { STRING, LONG, DOUBLE, LIST, OBJECT, FUNCTION }
 
 class DeserializationException(message: String) : Exception(message)
+class ScriptException(message: String) : Exception(message)

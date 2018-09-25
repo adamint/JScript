@@ -2,10 +2,47 @@ package com.adamratzman.jscript.main
 
 import com.adamratzman.jscript.variables.JObject
 
-class Parser(val jscript: JScript, val integratedObjects:MutableList<Class<out JObject>>) {
+class Parser(val jscript: JScript, val integratedObjects: MutableList<Class<out JObject>>) {
     fun parse(user: String, input: String) {
+        val localVariables = mutableMapOf<String,JObject>()
         // each statement will be terminated with a semi-colon (;) which will make parsing really easy
-        val statements = input.splitToStatements()
+        val statements = input.splitToStatements().map { it.trim() }
+        statements.forEach { statement ->
+            if (statement.isNotEmpty()) {
+                /*
+                there must be at least one argument which *must be* either a variable name
+                OR START WITH the name of a function. Otherwise, this statement is INVALID
+                 */
+
+                // case 1: statement starts with variable (MUST BE LOCAL!)
+                /*
+                Available actions:
+
+                variable = object
+                if variable is not an assignment and resolves to null, an exception is thrown
+                IF VARIABLE EXISTS ALREADY:
+                if JNumber:
+                variable++ translated to
+                variable--
+                variable += other
+                variable -= other
+
+                if JString:
+                variable += other
+                variabl
+                Any other found string is invalid
+                 */
+                val potentialVariableEnd = if (statement.indexOf(' ') != -1) statement.indexOf(' ')
+                else if (statement.indexOf('+') != -1) statement.indexOf('+')
+                else if (statement.indexOf('-') != -1) statement.indexOf('-')
+                else -1
+
+                // this involves manipulation of a variable
+                if (potentialVariableEnd != -1) {
+                    val variable = localVariables
+                }
+            }
+        }
     }
 }
 

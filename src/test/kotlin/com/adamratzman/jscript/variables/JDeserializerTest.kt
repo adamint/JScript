@@ -23,7 +23,8 @@ internal class JDeserializerTest {
     hello = "world"
   },
   list = [4.3, 5, false],
-  azzerial = "is cool?"
+  azzerial = "is cool?",
+  j44 = nothing
 }
 
         """.trimIndent()))
